@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-SECRETT Consortium Map</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <style>
+        :root {
+            --blue: #5625f5;
+            --blue-dark: #4019c6;
+            --associated: #b69aff;
+            --mixed: #853cda;
+            --ink: #20242a;
+            --muted: #65707c;
+            --line: #dfe4e8;
+            --surface: #ffffff;
+            --surface-soft: #f7f4ff;
+        }
+
+        * { box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            color: var(--ink);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        button, input { font: inherit; }
+        button { letter-spacing: 0; }
+        button:focus-visible, input:focus-visible, a:focus-visible {
+            outline: 3px solid rgba(86, 37, 245, 0.30);
+            outline-offset: 2px;
+        }
+        #map { height: 100vh; width: 100%; background-color: #eef1f3; }
+
+        .legend {
+            color: #4b5660;
+            background: rgba(255, 255, 255, 0.96);
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            box-shadow: 0 4px 16px rgba(25, 35, 45, 0.14);
+            margin: 0 0 16px 16px;
+            font-size: 12px;
+            line-height: 20px;
+        }
+        .legend-title { margin: 0 0 5px; color: var(--ink); font-size: 13px; }
+        .legend-row { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+        .legend-swatch {
+            width: 15px;
+            height: 15px;
+            flex: 0 0 15px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .info.stats {
+            width: min(360px, calc(100vw - 28px));
+            max-height: calc(100vh - 28px);
+            margin: 6px 6px 0 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--surface);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+            box-shadow: 0 8px 28px rgba(25, 35, 45, 0.18);
+            transition: width 0.2s ease;
+        }
+        .info.stats.minimized { width: min(300px, calc(100vw - 28px)); }
+        .info.stats.minimized .filter-panel,
+        .info.stats.minimized .stats-grid,
+        .info.stats.minimized .partner-scroll,
+        .info.stats.minimized .data-meta { display: none; }
+
+        .stats-header {
+            min-height: 50px;
+            padding: 9px 10px 9px 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            color: var(--blue);
+            background: #ffffff;
+            border-bottom: 3px solid var(--associated);
+        }
+        .brand { display:flex; align-items:center; gap:12px; min-width:0; }
+        .brand img { display:block; width:146px; height:auto; flex:0 0 auto; }
+        .stats-title { font-size: 15px; font-weight: 700; line-height: 1.25; }
+        .toggle-btn {
+            width: 32px;
+            height: 32px;
+            flex: 0 0 32px;
+            padding: 0;
+            border: 0;
+            border-radius: 4px;
+            color: var(--blue);
+            background: transparent;
+            cursor: pointer;
+            font-size: 20px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        .toggle-btn:hover { background: var(--surface-soft); }
+
+        .filter-panel { padding: 10px; border-bottom: 1px solid var(--line); background: var(--surface); }
+        .search-wrap { position: relative; }
+        .partner-search {
+            width: 100%;
+            height: 38px;
+            padding: 8px 36px 8px 11px;
+            border: 1px solid #c9d1d8;
+            border-radius: 5px;
+            color: var(--ink);
+            background: white;
+            font-size: 14px;
+        }
+        .partner-search::placeholder { color: #7a858f; }
+        .clear-search {
+            position: absolute;
+            top: 3px;
+            right: 3px;
+            width: 32px;
+            height: 32px;
+            border: 0;
+            border-radius: 4px;
+            color: #5b6670;
+            background: transparent;
+            cursor: pointer;
+            font-size: 20px;
+            line-height: 1;
+        }
+        .clear-search[hidden] { display: none; }
+        .clear-search:hover { background: var(--surface-soft); color: var(--ink); }
+        .filter-segment {
+            margin-top: 8px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            border: 1px solid #c9d1d8;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .filter-btn {
+            min-height: 32px;
+            padding: 5px 4px;
+            border: 0;
+            border-right: 1px solid #c9d1d8;
+            color: #46515b;
+            background: white;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .filter-btn:last-child { border-right: 0; }
+        .filter-btn:hover { background: var(--surface-soft); }
+        .filter-btn.is-active { color: white; background: var(--blue); }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 7px;
+            padding: 10px;
+            background: var(--surface-soft);
+            border-bottom: 1px solid var(--line);
+        }
+        .stat-item {
+            min-width: 0;
+            min-height: 59px;
+            padding: 7px 5px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            color: inherit;
+            text-align: center;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.1s ease, box-shadow 0.1s ease;
+        }
+        .stat-item:hover { border-color: var(--blue); box-shadow: 0 2px 7px rgba(25, 35, 45, 0.1); }
+        .stat-number { display: block; color: var(--blue); font-size: 20px; font-weight: 800; line-height: 1.1; }
+        .stat-label { display: block; margin-top: 3px; color: #5f6973; font-size: 11px; font-weight: 700; line-height: 1.15; }
+        .coverage-label { color: #315e77; font-size: 11px; font-weight: 700; }
+        .partner-alias { color: #59636c; font-size: 11px; }
+
+        .partner-scroll {
+            min-height: 90px;
+            padding: 10px;
+            overflow-y: auto;
+            flex: 1 1 auto;
+            background: white;
+        }
+        .list-group { margin-bottom: 14px; }
+        .list-group:last-child { margin-bottom: 0; }
+        .list-group-title {
+            margin-bottom: 4px;
+            padding: 6px 8px;
+            border-radius: 4px;
+            color: var(--blue);
+            background: #f0eaff;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+        .continent-label {
+            margin: 9px 5px 3px;
+            color: #707b85;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .sidebar-item {
+            width: 100%;
+            min-height: 38px;
+            padding: 6px 7px;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center;
+            gap: 8px;
+            border: 0;
+            border-bottom: 1px solid #edf0f2;
+            color: #313940;
+            text-align: left;
+            background: white;
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 1.25;
+        }
+        .sidebar-item:hover { background: #f7f3ff; }
+        .sidebar-name { min-width: 0; overflow-wrap: anywhere; }
+        .sidebar-name b { color: var(--ink); }
+        .sidebar-country { color: #6d7780; font-size: 12px; text-align: right; }
+        .empty-state { padding: 20px 10px; color: var(--muted); text-align: center; font-size: 14px; line-height: 1.4; }
+        .data-meta {
+            min-height: 38px;
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            border-top: 1px solid var(--line);
+            color: var(--muted);
+            background: var(--surface-soft);
+            font-size: 12px;
+        }
+        .data-meta a { color: var(--blue); font-weight: 600; text-decoration: none; }
+        .data-meta a:hover { text-decoration: underline; }
+
+        .map-status {
+            position: fixed;
+            top: 14px;
+            left: 50%;
+            z-index: 1900;
+            max-width: min(420px, calc(100vw - 28px));
+            padding: 10px 14px;
+            transform: translate(-50%, -16px);
+            border: 1px solid #c9d1d8;
+            border-radius: 6px;
+            color: #33404a;
+            background: rgba(255, 255, 255, 0.97);
+            box-shadow: 0 5px 18px rgba(25, 35, 45, 0.16);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            font-size: 14px;
+            text-align: center;
+        }
+        .map-status.is-visible { opacity: 1; transform: translate(-50%, 0); }
+        .map-status.is-error { border-color: #c84d4d; color: #7c2525; background: #fff8f8; }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            padding: 20px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(16, 24, 32, 0.56);
+        }
+        .modal-overlay.is-open { display: flex; }
+        .modal-box {
+            width: 650px;
+            max-width: 100%;
+            max-height: min(85vh, 760px);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+            animation: fadeIn 0.18s ease-out;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+        .modal-header {
+            min-height: 56px;
+            padding: 10px 12px 10px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border-bottom: 1px solid var(--line);
+            background: var(--surface-soft);
+        }
+        .modal-title { color: var(--ink); font-size: 18px; font-weight: 700; line-height: 1.25; }
+        .modal-close {
+            width: 36px;
+            height: 36px;
+            flex: 0 0 36px;
+            padding: 0;
+            border: 0;
+            border-radius: 4px;
+            color: #5d6872;
+            background: transparent;
+            cursor: pointer;
+            font-size: 24px;
+            line-height: 1;
+        }
+        .modal-close:hover { color: var(--ink); background: #e8ecef; }
+        .modal-content { padding: 18px 20px 22px; overflow-y: auto; font-size: 14px; line-height: 1.5; }
+        .modal-content > p:first-child { margin-top: 0; }
+        .modal-section-title {
+            margin: 16px 0 5px;
+            padding-bottom: 3px;
+            border-bottom: 2px solid #e7f1fb;
+            color: var(--blue);
+            font-size: 14px;
+            font-weight: 700;
+        }
+        .modal-continent-header {
+            margin-top: 20px;
+            padding: 6px 10px;
+            border-radius: 4px;
+            color: var(--ink);
+            background: #edf0f2;
+            font-size: 15px;
+            font-weight: 700;
+        }
+        .modal-subsection-title { margin: 10px 0 3px 10px; color: #4d5862; font-size: 13px; font-weight: 700; }
+        .modal-subsection { overflow-wrap: anywhere; }
+        .modal-list { margin: 0; padding: 0; list-style: none; }
+        .modal-list li {
+            padding: 6px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            border-bottom: 1px dashed #e3e7ea;
+        }
+        .modal-list li span { min-width: 0; overflow-wrap: anywhere; }
+        .modal-list li b { flex: 0 0 auto; white-space: nowrap; }
+
+        .leaflet-popup-content { width: min(280px, calc(100vw - 88px)); margin: 13px 18px; font-size: 13px; line-height: 1.4; }
+        .popup-header { margin-bottom: 7px; padding-bottom: 5px; border-bottom: 1px solid #ccd3d8; font-size: 15px; font-weight: 700; }
+        .partner-list { margin: 0; padding-left: 18px; }
+        .partner-list li { margin-bottom: 8px; }
+        .partner-list li:last-child { margin-bottom: 0; }
+        .tag {
+            margin: 3px 0 0 5px;
+            padding: 2px 5px;
+            display: inline-block;
+            border-radius: 3px;
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+        }
+        .tag-full { background: var(--blue); }
+        .tag-assoc { color: #25105d; background: var(--associated); }
+
+        @media (max-width: 640px) {
+            .leaflet-top.leaflet-right { left: 0; right: 0; }
+            .info.stats { width: calc(100vw - 20px); max-height: calc(100vh - 20px); margin: 4px auto 0; }
+            .info.stats.minimized { width: calc(100vw - 20px); }
+            .panel-expanded .legend { display: none; }
+            .stats-header { min-height: 46px; }
+            .stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .filter-btn { font-size: 11px; }
+            .legend { margin: 0 0 10px 10px; padding: 7px 9px; font-size: 11px; line-height: 18px; }
+            .legend-title { font-size: 12px; }
+            .legend-swatch { width: 13px; height: 13px; flex-basis: 13px; }
+            .modal-overlay { padding: 10px; align-items: flex-end; }
+            .modal-box { max-height: 82vh; }
+            .modal-content { padding: 16px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="map" aria-label="Interactive map of AI-SECRETT consortium partners"></div>
+<div id="mapStatus" class="map-status" role="status" aria-live="polite"></div>
+
+<div id="infoModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-hidden="true">
+    <div class="modal-box" role="document">
+        <div class="modal-header">
+            <div class="modal-title" id="modalTitle">Details</div>
+            <button type="button" class="modal-close" id="modalClose" aria-label="Close details">&times;</button>
+        </div>
+        <div class="modal-content" id="modalBody"></div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<script src="assets/participants.js"></script>
+<script src="assets/countries.geo.js"></script>
+<script>
+    // --- Configuration ---
+    const COLOR_FULL = "#5625f5";
+    const COLOR_ASSOCIATED = "#b69aff";
+    const COLOR_BOTH = "#853cda";
+    const COLOR_DEFAULT = "#dddddd";
+
+    // --- Continent Mapping ---
+    const continentMap = {
+        // Europe
+        "Italy": "Europe", "Spain": "Europe", "Belgium": "Europe", "Estonia": "Europe", 
+        "Portugal": "Europe", "Bulgaria": "Europe", "Hungary": "Europe", "Croatia": "Europe", 
+        "Netherlands": "Europe", "France": "Europe", "Austria": "Europe", "Greece": "Europe", 
+        "Romania": "Europe", "Slovakia": "Europe", "Ukraine": "Europe", "Cyprus": "Europe", 
+        "Serbia": "Europe", "Montenegro": "Europe", "Slovenia": "Europe", "Lithuania": "Europe", 
+        "Sweden": "Europe", "Finland": "Europe", "Norway": "Europe", 
+        "Denmark": "Europe", "Poland": "Europe", "Bosnia and Herzegovina": "Europe", 
+        "Turkey": "Europe", "Albania": "Europe", "Germany": "Europe", "North Macedonia": "Europe",
+        "Latvia": "Europe", "Ireland": "Europe",
+        // Oceania
+        "Australia": "Oceania",
+        // Asia
+        "United Arab Emirates": "Asia", "South Korea": "Asia", "Japan": "Asia",
+        // Africa
+        "Morocco": "Africa", "Egypt": "Africa",
+        // Americas
+        "Argentina": "South America", "Ecuador": "South America", "Colombia": "South America", 
+        "Peru": "South America", "Bolivia": "South America", "Costa Rica": "North America", 
+        "Guatemala": "North America"
+    };
+
+    // Participants are keyed by their official participant number.
+    const participants = window.CONSORTIUM_PARTICIPANTS;
+    const partnerData = {};
+    function addCountryEntry(country, participant, isAdditionalCoverage) {
+        if (!partnerData[country]) partnerData[country] = [];
+        partnerData[country].push({
+            number: participant.number,
+            code: participant.shortName,
+            name: participant.legalName,
+            alias: participant.displayAlias || "",
+            officialCountry: participant.country,
+            isAdditionalCoverage,
+            type: participant.role === "AP" ? "Associated Partner" : "Beneficiary"
+        });
+    }
+    participants.forEach(participant => {
+        addCountryEntry(participant.country, participant, false);
+        (participant.additionalCoverage || []).forEach(country => addCountryEntry(country, participant, true));
+    });
+
+    // --- Application Configuration ---
+    const PARTNER_TYPES = {
+        full: "Beneficiary",
+        assoc: "Associated Partner"
+    };
+    const TYPE_LABELS = {
+        "Beneficiary": "Beneficiary",
+        "Associated Partner": "Associated Partner"
+    };
+    const TYPE_TAG_CLASSES = {
+        "Beneficiary": "tag-full",
+        "Associated Partner": "tag-assoc"
+    };
+    const COUNTRY_NAME_ALIASES = {
+        "Republic of Korea": "South Korea",
+        "Republic of Serbia": "Serbia",
+        "The Netherlands": "Netherlands",
+        "Republic of Ireland": "Ireland"
+    };
+    const MAP_UPDATED_LABEL = "19 October 2026";
+    const SOURCE_URL = "https://aisecrett.eu/partners/";
+    const uiState = { query: "", filter: "all" };
+    const countryLayers = new Map();
+    let geoJsonLayer = null;
+    let selectedLayer = null;
+    let lastFocusedElement = null;
+    let statusTimer = null;
+
+    function escapeHtml(value) {
+        return String(value)
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#039;");
+    }
+
+    function normalizeCountryName(name) {
+        if (COUNTRY_NAME_ALIASES[name]) return COUNTRY_NAME_ALIASES[name];
+        if (name.includes("Macedonia")) return "North Macedonia";
+        return name;
+    }
+
+    function calculateStats() {
+        const stats = {
+            currentSet: new Set(),
+            assocSet: new Set(),
+            countries: Object.keys(partnerData).length,
+            officialCountrySet: new Set(participants.map(participant => participant.country)),
+            officialCountries: new Set(participants.map(participant => participant.country)).size,
+            continents: new Set(),
+            data: { full: {}, assoc: {} }
+        };
+
+        for (const [country, partners] of Object.entries(partnerData)) {
+            const continent = continentMap[country] || "Other";
+            stats.continents.add(continent);
+            stats.data.full[country] = [];
+            stats.data.assoc[country] = [];
+
+            partners.forEach(partner => {
+                if (partner.type === PARTNER_TYPES.full) {
+                    stats.currentSet.add(partner.number);
+                    if (!partner.isAdditionalCoverage) stats.data.full[country].push(partner);
+                } else if (partner.type === PARTNER_TYPES.assoc) {
+                    stats.assocSet.add(partner.number);
+                    if (!partner.isAdditionalCoverage) stats.data.assoc[country].push(partner);
+                }
+            });
+        }
+        return stats;
+    }
+
+    function validatePartnerData() {
+        const validTypes = new Set(Object.values(PARTNER_TYPES));
+        const issues = [];
+        if (participants.length !== 23) issues.push(`Expected 23 participants, found ${participants.length}`);
+        if (new Set(participants.map(participant => participant.number)).size !== 23) issues.push("Duplicate participant number");
+        if (new Set(participants.map(participant => participant.country)).size !== 12) issues.push("Official country count is not 12");
+        if (Object.keys(partnerData).length !== 12) issues.push("Covered country count is not 12");
+        for (const [country, partners] of Object.entries(partnerData)) {
+            if (!continentMap[country]) issues.push(`Missing continent for ${country}`);
+            if (!Array.isArray(partners) || partners.length === 0) issues.push(`No partners for ${country}`);
+            partners.forEach((partner, index) => {
+                if (!partner.code || !partner.name || !validTypes.has(partner.type)) {
+                    issues.push(`Invalid partner at ${country} #${index + 1}`);
+                }
+            });
+        }
+        return issues;
+    }
+
+    function matchesCurrentView(country, partner) {
+        const typeMatches = uiState.filter === "all" || partner.type === PARTNER_TYPES[uiState.filter];
+        if (!typeMatches) return false;
+        if (!uiState.query) return true;
+        const haystack = `${country} ${partner.code} ${partner.name} ${partner.alias} ${partner.officialCountry} ${partner.number}`.toLocaleLowerCase();
+        return haystack.includes(uiState.query);
+    }
+
+    function getVisiblePartners(country) {
+        return (partnerData[country] || []).filter(partner => matchesCurrentView(country, partner));
+    }
+
+    function getCountryStyle(feature) {
+        const country = normalizeCountryName(feature.properties.name);
+        const visiblePartners = getVisiblePartners(country);
+        const visibleTypes = new Set(visiblePartners.map(partner => partner.type));
+        const coverageOnly = visiblePartners.length > 0 && visiblePartners.every(partner => partner.isAdditionalCoverage);
+        let fillColor = COLOR_DEFAULT;
+
+        if (visibleTypes.size > 1) fillColor = COLOR_BOTH;
+        else if (visibleTypes.has(PARTNER_TYPES.full)) fillColor = COLOR_FULL;
+        else if (visibleTypes.has(PARTNER_TYPES.assoc)) fillColor = COLOR_ASSOCIATED;
+
+        return {
+            fillColor,
+            weight: 1,
+            opacity: 1,
+            color: coverageOnly ? "#325f7a" : "white",
+            dashArray: coverageOnly ? "4 3" : null,
+            fillOpacity: visiblePartners.length ? 0.78 : 0.48
+        };
+    }
+
+    function buildPopup(country) {
+        const visiblePartners = getVisiblePartners(country);
+        const partners = visiblePartners.length ? visiblePartners : (partnerData[country] || []);
+        let html = `<div class="popup-header">${escapeHtml(country)}</div><ul class="partner-list">`;
+        partners.forEach(partner => {
+            const alias = partner.alias ? `<br><span class="partner-alias">Also known as ${escapeHtml(partner.alias)}</span>` : "";
+            const coverage = partner.isAdditionalCoverage ? `<br><span class="coverage-label">Additional geographic coverage · official country: ${escapeHtml(partner.officialCountry)}</span>` : "";
+            html += `<li><b>${partner.number} | ${escapeHtml(partner.code)}</b><br>${escapeHtml(partner.name)}${alias}${coverage}<br><span class="tag ${TYPE_TAG_CLASSES[partner.type]}">${TYPE_LABELS[partner.type]}</span></li>`;
+        });
+        return `${html}</ul>`;
+    }
+
+    function selectCountryLayer(layer, country) {
+        if (selectedLayer && selectedLayer !== layer && geoJsonLayer) geoJsonLayer.resetStyle(selectedLayer);
+        selectedLayer = layer;
+        layer.setStyle({ weight: 3, color: "#20242a", fillOpacity: 0.92 });
+        layer.setPopupContent(buildPopup(country));
+    }
+
+    function focusCountry(country) {
+        const layer = countryLayers.get(country);
+        if (!layer) return;
+        selectCountryLayer(layer, country);
+        map.fitBounds(layer.getBounds(), { padding: [30, 30], maxZoom: 5 });
+        layer.openPopup();
+    }
+
+    function showStatus(message, isError = false, duration = 4500) {
+        const status = document.getElementById("mapStatus");
+        window.clearTimeout(statusTimer);
+        status.textContent = message;
+        status.classList.toggle("is-error", isError);
+        status.classList.add("is-visible");
+        if (duration) {
+            statusTimer = window.setTimeout(() => status.classList.remove("is-visible"), duration);
+        }
+    }
+
+    const appStats = calculateStats();
+
+    // --- Accessible Detail Dialog ---
+    function buildSimplePartnerSections(dataObject) {
+        const partners = Object.values(dataObject).flat().sort((a, b) => a.number - b.number);
+        return `<ul class="modal-list">${partners.map(partner => `<li><span><b>${partner.number} | ${escapeHtml(partner.code)}</b> ${escapeHtml(partner.name)}</span><span>${escapeHtml(partner.officialCountry)}</span></li>`).join("")}</ul>`;
+    }
+
+    function openModal(type) {
+        let title = "";
+        let html = "";
+
+        if (type === "full") {
+            title = `Beneficiaries (${appStats.currentSet.size})`;
+            html = `${buildSimplePartnerSections(appStats.data.full)}`;
+        } else if (type === "assoc") {
+            title = `Associated Partners (${appStats.assocSet.size})`;
+            html = `${buildSimplePartnerSections(appStats.data.assoc)}`;
+        } else if (type === "countries") {
+            title = `Countries Covered (${appStats.countries})`;
+            html = `<p><b>All ${appStats.countries} countries are represented in the consortium.</b> Each participant is counted once.</p><p><b>Countries by Continent</b></p>`;
+            const groups = {};
+            Object.keys(partnerData).sort().forEach(country => {
+                const continent = continentMap[country];
+                if (!groups[continent]) groups[continent] = [];
+                groups[continent].push(country);
+            });
+            for (const [continent, countries] of Object.entries(groups)) {
+                html += `<div class="modal-section-title">${escapeHtml(continent)}</div><div class="modal-subsection">${countries.map(country => `${escapeHtml(country)}${appStats.officialCountrySet.has(country) ? "" : " (additional coverage)"}`).join(", ")}</div>`;
+            }
+        } else if (type === "continents") {
+            title = `Continents Covered (${appStats.continents.size})`;
+            html = "<p><b>Consortium by continent</b></p>";
+            const groups = {};
+            for (const country of Object.keys(partnerData)) {
+                const continent = continentMap[country];
+                if (!groups[continent]) groups[continent] = [];
+                groups[continent].push(country);
+            }
+            for (const [continent, countries] of Object.entries(groups)) {
+                html += `<div class="modal-section-title">${escapeHtml(continent)}</div><div class="modal-subsection"><b>${countries.length} countries involved</b><br>${countries.map(escapeHtml).join(", ")}</div>`;
+            }
+        }
+
+        const modal = document.getElementById("infoModal");
+        lastFocusedElement = document.activeElement;
+        document.getElementById("modalTitle").textContent = title;
+        document.getElementById("modalBody").innerHTML = html;
+        modal.classList.add("is-open");
+        modal.setAttribute("aria-hidden", "false");
+        document.getElementById("modalClose").focus();
+    }
+
+    function closeModal() {
+        const modal = document.getElementById("infoModal");
+        if (!modal.classList.contains("is-open")) return;
+        modal.classList.remove("is-open");
+        modal.setAttribute("aria-hidden", "true");
+        if (lastFocusedElement) lastFocusedElement.focus();
+    }
+
+    document.getElementById("modalClose").addEventListener("click", closeModal);
+    document.getElementById("infoModal").addEventListener("click", event => {
+        if (event.target.id === "infoModal") closeModal();
+    });
+    document.addEventListener("keydown", event => {
+        const modal = document.getElementById("infoModal");
+        if (!modal.classList.contains("is-open")) return;
+        if (event.key === "Escape") {
+            closeModal();
+            return;
+        }
+        if (event.key !== "Tab") return;
+        const focusable = [...modal.querySelectorAll('button, a[href], [tabindex]:not([tabindex="-1"])')];
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    });
+
+    // --- Map and Resilient Basemap ---
+    const map = L.map("map", { worldCopyJump: true, zoomSnap: 0.5 }).setView([51, 10], 4);
+    const primaryTiles = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+        attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ",
+        maxZoom: 19
+    });
+    const backupTiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+    });
+    let backupActive = false;
+
+    primaryTiles.on("tileerror", () => {
+        if (backupActive) return;
+        backupActive = true;
+        map.removeLayer(primaryTiles);
+        backupTiles.addTo(map);
+        showStatus("The backup map background is being used.");
+    });
+    backupTiles.on("tileerror", () => showStatus("The map background is temporarily unavailable.", true, 0));
+    primaryTiles.addTo(map);
+
+    Promise.resolve(window.COUNTRY_BOUNDARIES)
+        .then(data => {
+            geoJsonLayer = L.geoJson(data, {
+                style: getCountryStyle,
+                onEachFeature: (feature, layer) => {
+                    const country = normalizeCountryName(feature.properties.name);
+                    if (!partnerData[country]) return;
+                    countryLayers.set(country, layer);
+                    layer.bindPopup(buildPopup(country));
+                    layer.on({
+                        click: () => selectCountryLayer(layer, country),
+                        mouseover: () => {
+                            if (selectedLayer !== layer) layer.setStyle({ weight: 2, color: "#59636c", fillOpacity: 0.9 });
+                        },
+                        mouseout: () => {
+                            if (selectedLayer !== layer && geoJsonLayer) geoJsonLayer.resetStyle(layer);
+                        },
+                        add: () => {
+                            const element = layer.getElement();
+                            if (!element) return;
+                            element.setAttribute("tabindex", "0");
+                            element.setAttribute("role", "button");
+                            element.setAttribute("aria-label", `View partners in ${country}`);
+                            element.addEventListener("keydown", event => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    focusCountry(country);
+                                }
+                            });
+                        }
+                    });
+                }
+            }).addTo(map);
+            updateMapAndList();
+        })
+        .catch(error => {
+            console.error(error);
+            showStatus("Country boundaries could not load. Please refresh the page.", true, 0);
+        });
+
+    map.on("popupclose", () => {
+        if (selectedLayer && geoJsonLayer) geoJsonLayer.resetStyle(selectedLayer);
+        selectedLayer = null;
+    });
+
+    // --- Search, Filters, and Partner List ---
+    const sectionConfig = [
+        { key: "full", label: "Beneficiaries" },
+        { key: "assoc", label: "Associated Partners" }
+    ];
+
+    function buildPartnerList() {
+        let html = "";
+        let resultCount = 0;
+
+        sectionConfig.forEach(section => {
+            if (uiState.filter !== "all" && uiState.filter !== section.key) return;
+            const matches = participants
+                .filter(participant => section.key === "assoc" ? participant.role === "AP" : participant.role !== "AP")
+                .sort((a, b) => a.number - b.number)
+                .map(participant => ({
+                    country: participant.country,
+                    partner: (partnerData[participant.country] || []).find(item => item.number === participant.number && !item.isAdditionalCoverage)
+                }))
+                .filter(({ country, partner }) => partner && matchesCurrentView(country, partner));
+            if (!matches.length) return;
+
+            resultCount += matches.length;
+            html += `<section class="list-group"><div class="list-group-title">${section.label}</div>`;
+            matches.forEach(({ country, partner }) => {
+                html += `<button type="button" class="sidebar-item" data-country="${encodeURIComponent(country)}" aria-label="Show ${escapeHtml(partner.name)} in ${escapeHtml(country)}"><span class="sidebar-name"><b>${partner.number} | ${escapeHtml(partner.code)}</b> ${escapeHtml(partner.name)}</span><span class="sidebar-country">${escapeHtml(country)}</span></button>`;
+            });
+            html += "</section>";
+        });
+
+        return resultCount ? html : '<div class="empty-state">No partners match this search and filter.</div>';
+    }
+
+    function updateMapAndList() {
+        const list = document.getElementById("partnerList");
+        if (list) list.innerHTML = buildPartnerList();
+        if (geoJsonLayer) {
+            if (selectedLayer) {
+                map.closePopup();
+                selectedLayer = null;
+            }
+            geoJsonLayer.setStyle(getCountryStyle);
+            countryLayers.forEach((layer, country) => layer.setPopupContent(buildPopup(country)));
+        }
+    }
+
+    function setFilter(filter) {
+        uiState.filter = filter;
+        document.querySelectorAll(".filter-btn").forEach(button => {
+            const active = button.dataset.filter === filter;
+            button.classList.toggle("is-active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+        updateMapAndList();
+    }
+
+    const statsControl = L.control({ position: "topright" });
+    statsControl.onAdd = () => {
+        const panel = L.DomUtil.create("section", "info stats");
+        panel.id = "projectOverview";
+        panel.setAttribute("aria-label", "AI-SECRETT consortium composition");
+        panel.innerHTML = `
+            <div class="stats-header">
+                <span class="brand"><img src="assets/ai-secrett-logo.png" alt="AI-SECRETT"><span class="stats-title">Consortium map</span></span>
+                <button type="button" class="toggle-btn" id="toggleStats" aria-label="Collapse consortium panel" aria-expanded="true">&minus;</button>
+            </div>
+            <div class="filter-panel">
+                <div class="search-wrap">
+                    <input type="search" class="partner-search" id="partnerSearch" placeholder="Search country or partner" aria-label="Search country or partner">
+                    <button type="button" class="clear-search" id="clearSearch" aria-label="Clear search" hidden>&times;</button>
+                </div>
+                <div class="filter-segment" aria-label="Partner status filter">
+                    <button type="button" class="filter-btn is-active" data-filter="all" aria-pressed="true">All</button>
+                    <button type="button" class="filter-btn" data-filter="full" aria-pressed="false">Beneficiaries</button>
+                    <button type="button" class="filter-btn" data-filter="assoc" aria-pressed="false">Associated</button>
+                </div>
+            </div>
+            <div class="stats-grid">
+                <button type="button" class="stat-item" data-modal="full"><span class="stat-number">${appStats.currentSet.size}</span><span class="stat-label">Beneficiaries</span></button>
+                <button type="button" class="stat-item" data-modal="assoc"><span class="stat-number">${appStats.assocSet.size}</span><span class="stat-label">Associated Partners</span></button>
+                <button type="button" class="stat-item" data-modal="countries"><span class="stat-number">${appStats.countries}</span><span class="stat-label">Countries Covered</span></button>
+            </div>
+            <div class="partner-scroll" id="partnerList" aria-live="polite"></div>
+            <div class="data-meta"><span>Last updated ${MAP_UPDATED_LABEL}</span><a href="${SOURCE_URL}" target="_blank" rel="noopener noreferrer">Partner directory</a></div>
+        `;
+
+        if (window.matchMedia("(max-width: 640px)").matches) panel.classList.add("minimized");
+        const toggle = panel.querySelector("#toggleStats");
+        const search = panel.querySelector("#partnerSearch");
+        const clearSearch = panel.querySelector("#clearSearch");
+
+        function syncToggle() {
+            const minimized = panel.classList.contains("minimized");
+            toggle.innerHTML = minimized ? "+" : "&minus;";
+            toggle.setAttribute("aria-expanded", String(!minimized));
+            toggle.setAttribute("aria-label", minimized ? "Expand consortium panel" : "Collapse consortium panel");
+            document.body.classList.toggle("panel-expanded", !minimized);
+        }
+
+        toggle.addEventListener("click", () => {
+            panel.classList.toggle("minimized");
+            syncToggle();
+        });
+        search.addEventListener("input", event => {
+            uiState.query = event.target.value.trim().toLocaleLowerCase();
+            clearSearch.hidden = !uiState.query;
+            updateMapAndList();
+        });
+        clearSearch.addEventListener("click", () => {
+            search.value = "";
+            uiState.query = "";
+            clearSearch.hidden = true;
+            search.focus();
+            updateMapAndList();
+        });
+        panel.querySelectorAll(".filter-btn").forEach(button => {
+            button.addEventListener("click", () => setFilter(button.dataset.filter));
+        });
+        panel.querySelectorAll("[data-modal]").forEach(button => {
+            button.addEventListener("click", () => openModal(button.dataset.modal));
+        });
+        panel.querySelector("#partnerList").addEventListener("click", event => {
+            const button = event.target.closest("[data-country]");
+            if (button) focusCountry(decodeURIComponent(button.dataset.country));
+        });
+        L.DomEvent.disableScrollPropagation(panel);
+        L.DomEvent.disableClickPropagation(panel);
+        window.setTimeout(() => {
+            syncToggle();
+            updateMapAndList();
+        }, 0);
+        return panel;
+    };
+    statsControl.addTo(map);
+
+    // --- Legend ---
+    const legend = L.control({ position: "bottomleft" });
+    legend.onAdd = () => {
+        const panel = L.DomUtil.create("div", "legend");
+        panel.innerHTML = `
+            <div class="legend-title"><b>Partner coverage</b></div>
+            <div class="legend-row"><span class="legend-swatch" style="background:${COLOR_FULL}"></span>Beneficiaries</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:${COLOR_ASSOCIATED}"></span>Associated Partners</div>
+            <div class="legend-row"><span class="legend-swatch" style="background:${COLOR_BOTH}"></span>Beneficiaries &amp; Associated Partners</div>
+            
+        `;
+        return panel;
+    };
+    legend.addTo(map);
+
+    const dataIssues = validatePartnerData();
+    if (dataIssues.length) {
+        console.error("Partner data validation failed:", dataIssues);
+        showStatus("Some consortium data could not be validated.", true, 0);
+    }
+
+</script>
+</body>
+</html>
