@@ -2,6 +2,8 @@
 
 An interactive map of the AI-SECRETT consortium, adapted from the AISHA and AI4Gov-X consortium maps. Open `index.html` through a web server to use the map. The page includes partner search, beneficiary and associated-partner filters, country details, and a partner directory.
 
+**Live map:** https://fracastiglione.github.io/AI-SECRETT-Consortium-Map/
+
 ## Source and scope
 
 - The supplied **AI-SECRETT Partners List.docx** provides the numbered partners, their names, acronyms, roles, and beneficiary countries. PICs and street addresses are deliberately omitted from the public map.
